@@ -11,6 +11,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.ServletException;
 import javax.servlet.sip.URI;
+import javax.sip.header.ContactHeader;
 import javax.servlet.sip.Proxy;
 import javax.servlet.sip.SipFactory;
 
@@ -34,11 +35,33 @@ public class Redirect extends SipServlet {
 		RegistrarDB = new HashMap<String,String>();
 	}
 	
+	protected void send403(SipServletRequest request) throws ServletException,
+	IOException {
+		SipServletResponse response = request.createResponse(403);
+		response.send();
+	}
+	
+	protected void send200(SipServletRequest request) throws ServletException,
+	IOException {
+		SipServletResponse response = request.createResponse(202);
+		response.send();
+	}
+	
 	protected boolean verifyDomain(SipServletRequest request) throws ServletException,
 	IOException {
 		String aor = getAttr(request.getHeader("To"), "@");
-		log(aor);
+		log("========================" + aor);
 		return aor.compareTo("@acme.pt")==0;
+	}
+	
+	protected boolean isColaborator(SipServletRequest request) throws ServletException,
+	IOException {
+		return getAttr(request.getHeader("To"), "sip:").contains("colaborador");
+	}
+	
+	protected boolean isGestor(SipServletRequest request) throws ServletException,
+	IOException {
+		return getAttr(request.getHeader("To"), "sip:").contains("gestor");
 	}
 
 	/**
@@ -47,6 +70,13 @@ public class Redirect extends SipServlet {
         */
 	protected void doRegister(SipServletRequest request) throws ServletException,
 			IOException {
+		
+		if(!verifyDomain(request)){
+			send403(request);
+			return;
+		
+		}
+		
 		String toHeader = request.getHeader("To");
 		String contactHeader = request.getHeader("Contact");
 		String aor = getAttr(toHeader, "sip:");	
@@ -65,6 +95,7 @@ public class Redirect extends SipServlet {
         		log(pairs.getKey() + " = " + pairs.getValue());
     		}
 		log("REGISTER:******");
+		log("======" + contactHeader.split("=")[1]);
 	}
 
 	/**
@@ -75,17 +106,6 @@ public class Redirect extends SipServlet {
         */
 	protected void doInvite(SipServletRequest request)
                   throws ServletException, IOException {
-		
-		if(!verifyDomain(request)){
-			SipServletResponse response = request.createResponse(403);
-			response.send();
-			return;
-		
-		}
-		else{
-			SipServletResponse response = request.createResponse(200);
-			response.send();
-		}
 		
 		// Some logs to show the content of the Registrar database.
 		log("INVITE:***");
@@ -99,17 +119,20 @@ public class Redirect extends SipServlet {
 		String aor = getAttr(request.getHeader("To"), "sip:"); // Get the To AoR
 		log("INVITE: To: " + aor);
 	    if (!RegistrarDB.containsKey(aor)) { // To AoR not in the database, reply 404
-			/*
+			
 	    	request.createResponse(100).send();
 			Proxy proxy = request.getProxy();
 			ArrayList<URI> addrList = new ArrayList<URI>();
-			addrList.add(factory.createURI("sip:announcement@127.0.0.1:5080"));
+			addrList.add(factory.createURI(aor));
 			proxy.proxyTo(addrList);
-	    	*/
+			log("PROXYYYYYYY");
 	    	
+	    	
+	    	/*
 	    	SipServletResponse response; 
 			response = request.createResponse(404);
-			response.send();	
+			response.send();
+			*/	
 			
 	    } else {
 			// SipServletRequest req = factory.createRequest(request.getApplicationSession(), "INFO", "sip:server@acme.pt", RegistrarDB.get(aor));
@@ -121,6 +144,12 @@ public class Redirect extends SipServlet {
 			
 		}
 	}
+	
+	protected void doResponse(SipServletResponse response)
+            throws ServletException, IOException {
+		log("===!==!=!=!=!=!==!=!=!=!=!="+response.getMethod());
+	}
+	
 	
 	/**
         * Auxiliary function for extracting attribute values
