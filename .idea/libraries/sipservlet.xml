@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="sipservlet">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/lib/sipservlet.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

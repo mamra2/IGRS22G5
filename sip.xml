@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<sip-app>        
+	<app-name>redirect</app-name>
+        <display-name>SIP Redirect</display-name>
+	<description>SIP Redirect</description>
+	
+	<servlet-selection>
+		<main-servlet>
+			redirect
+		</main-servlet>
+	</servlet-selection>
+
+	<servlet>
+		<servlet-name>redirect</servlet-name>
+		<display-name>redirect</display-name>
+		<description>SIP Redirect Server</description>
+		<servlet-class>
+			Redirect
+		</servlet-class>
+		<load-on-startup>1</load-on-startup>
+	</servlet>
+</sip-app>
+

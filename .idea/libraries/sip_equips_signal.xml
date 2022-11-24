@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="sip-equips-signal">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/lib/sip-equips-signal.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
