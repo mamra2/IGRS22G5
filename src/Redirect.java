@@ -86,9 +86,7 @@ public class Redirect extends SipServlet {
             log("PROXY FORBIDDEN");
             request.createResponse(404).send();
         } else {
-            SipServletResponse response = request.createResponse(300);
-            response.setHeader("Contact", registrarDB.get(aor));
-            response.send();
+            request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(aor)));
         }
     }
 
