@@ -24,12 +24,19 @@ public class Redirect extends SipServlet {
     protected void doPublish(SipServletRequest request) throws ServletException, IOException {
         String aor = getAttr(request.getHeader("From"), "sip:");
 
-        if (!verifyDomain(request) || !(verifyUserType(request, "colaborador") || verifyUserType(request, "gestor")) || !registrarDB.containsKey(aor)) {
+        if (!verifyDomain(request) || !(verifyUserType(request, "colaborador") || verifyUserType(request, "gestor"))) {
             request.createResponse(403).send();
             return;
         }
 
+        if (!registrarDB.containsKey(aor)) {
+            request.createResponse(404).send();
+            return;
+        }
+
+        // this has an Expires header, so handle that maybe?
         stateDB.put(aor, request.getHeader("Content-Length").equals("194"));
+        request.createResponse(200).send();
     }
 
     @Override
