@@ -9,7 +9,6 @@
         <element id="directory" name="lib">
           <element id="library" level="project" name="servlet" />
           <element id="library" level="project" name="sipservlet" />
-          <element id="library" level="project" name="sip-equips-signal" />
         </element>
         <element id="file-copy" path="$PROJECT_DIR$/sip.xml" />
         <element id="file-copy" path="$PROJECT_DIR$/sip-app_1_0.dtd" />

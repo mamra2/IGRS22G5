@@ -1,11 +1,12 @@
 import javax.servlet.ServletException;
 import javax.servlet.sip.*;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 public class Redirect extends SipServlet {
     static private Map<String, String> registrarDB;
+    static private Map<String, Boolean> stateDB;
     static private SipFactory sipFactory;
 
     /**
@@ -14,23 +15,32 @@ public class Redirect extends SipServlet {
     @Override
     public void init() {
         sipFactory = (SipFactory) getServletContext().getAttribute(SIP_FACTORY);
+
         registrarDB = new HashMap<>();
+        stateDB = new HashMap<>();
     }
 
     @Override
-    protected void doRegister(SipServletRequest request) throws IOException {
-        if (!verifyDomain(request)) {
+    protected void doPublish(SipServletRequest request) throws ServletException, IOException {
+        String aor = getAttr(request.getHeader("From"), "sip:");
+
+        if (!verifyDomain(request) || !(verifyUserType(request, "colaborador") || verifyUserType(request, "gestor")) || !registrarDB.containsKey(aor)) {
             request.createResponse(403).send();
             return;
         }
 
-        if (!(verifyUserType(request, "colaborador") || verifyUserType(request, "gestor"))) {
+        stateDB.put(aor, request.getHeader("Content-Length").equals("194"));
+    }
+
+    @Override
+    protected void doRegister(SipServletRequest request) throws IOException {
+        if (!verifyDomain(request) || !(verifyUserType(request, "colaborador") || verifyUserType(request, "gestor"))) {
             request.createResponse(403).send();
             return;
         }
 
         String contactHeader = request.getHeader("Contact");
-        String aor = getAttr(request.getHeader("To"), "sip:");
+        String aor = getAttr(request.getHeader("From"), "sip:");
         String contact = getAttr(contactHeader, "sip:");
 
         // if not null then linphone
@@ -46,6 +56,8 @@ public class Redirect extends SipServlet {
                 registrarDB.remove(aor);
                 request.createResponse(200).send();
             }
+
+            stateDB.remove(aor);
         } else {
             log("SIP REGISTER");
 
@@ -76,6 +88,21 @@ public class Redirect extends SipServlet {
     @Override
     protected void doMessage(SipServletRequest request) throws ServletException, IOException {
         String aor = getAttr(request.getHeader("To"), "sip:");
+
+        if (aor.equals("sip:alerta@acme.pt")) {
+            if (registrarDB.containsKey("sip:gestor@acme.pt")) {
+                log("PROXY TO MANAGER");
+                request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get("sip:gestor@acme.pt")));
+                log("MESSAGE CONTENT LEN: " + request.getContentLength());
+                log("MESSAGE CONTENT: " + new String(request.getRawContent(), StandardCharsets.UTF_8));
+                request.createResponse(200).send();
+            }
+        }
+
+        if (aor.equals("sip:gestor@acme.pt")) {
+            log("PROXY WORKED");
+            request.createResponse(200).send();
+        }
     }
 
     /**
