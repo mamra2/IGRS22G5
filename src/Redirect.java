@@ -10,6 +10,8 @@ public class Redirect extends SipServlet {
     static private ArrayList<String> colabDB;
     static private SipFactory sipFactory;
 
+    static final private String GESTOR = "sip:gestor@acme.pt";
+    static final private String ALERTA = "sip:alerta@acme.pt";
     /**
      * SipServlet functions
      */
@@ -24,13 +26,12 @@ public class Redirect extends SipServlet {
 
     @Override
     protected void doPublish(SipServletRequest request) throws ServletException, IOException {
-        String aor = getAttr(request.getHeader("From"), "sip:");
-
-        if (!inDomain(request) || !(userType(request, "colaborador") || userType(request, "gestor"))) {
+        if (!inDomain(request)) {
             request.createResponse(403).send();
             return;
         }
 
+        String aor = getAttr(request.getHeader("From"), "sip:");
         if (!registrarDB.containsKey(aor)) {
             request.createResponse(404).send();
             return;
@@ -42,7 +43,7 @@ public class Redirect extends SipServlet {
 
     @Override
     protected void doRegister(SipServletRequest request) throws IOException {
-        if (!inDomain(request) || !(userType(request, "colaborador") || userType(request, "gestor"))) {
+        if (!inDomain(request)) {
             request.createResponse(403).send();
             return;
         }
@@ -54,7 +55,7 @@ public class Redirect extends SipServlet {
         // if not null then linphone
         String expiresHeader = request.getHeader("Expires");
         String expiry = expiresHeader != null ? expiresHeader : contactHeader.split("=")[1];
-        System.out.println(expiresHeader != null ? "LINPHONE" : "TWINKLE");
+        log(expiresHeader != null ? "LINPHONE" : "TWINKLE");
         if (expiry.equals("0")) {
             log("SIP UNREGISTER");
 
@@ -62,13 +63,14 @@ public class Redirect extends SipServlet {
                 request.createResponse(404).send();
             } else {
                 registrarDB.remove(aor);
+                stateDB.remove(aor);
                 request.createResponse(200).send();
             }
-
-            stateDB.remove(aor);
         } else {
             log("SIP REGISTER");
 
+            // this already handle ip/port changes for existing contacts
+            // kinda insecure?
             registrarDB.put(aor, contact);
             request.createResponse(200).send();
         }
@@ -81,39 +83,48 @@ public class Redirect extends SipServlet {
             return;
         }
 
+        String aorFrom = getAttr(request.getHeader("From"), "sip:");
         String aorTo = getAttr(request.getHeader("To"), "sip:");
-
         if (!registrarDB.containsKey(aorTo)) {
-            if (userType(request, "gestor") && aorTo.equals("sip:alerta@acme.pt")) {
-                SipServletRequest customRequest = sipFactory.createRequest(request.getApplicationSession(), "MESSAGE", "sip:alerta@acme.pt", registrarDB.get("sip:gestor@acme.pt"));
-                customRequest.setContent("Consola\nADD address\nREMOVE address".getBytes(), "text/plain");
-                customRequest.send();
-                request.createResponse(200).send();
+            if (aorTo.equals(ALERTA) && registrarDB.containsKey(GESTOR)) {
+                if (aorFrom.equals(GESTOR)) {
+                    SipServletRequest msg = sipFactory.createRequest(
+                            request.getApplicationSession(),
+                            "MESSAGE",
+                            ALERTA,
+                            registrarDB.get(GESTOR)
+                    );
+                    msg.setContent("ADD address\nREMOVE address".getBytes(), "text/plain");
+                    msg.send();
+                    // end the call
+                    request.createResponse(200).send();
+                } else {
+                    request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(GESTOR)));
+                }
             } else {
                 request.createResponse(404).send();
             }
         } else {
-            request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(aorTo)));
+             request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(aorTo)));
         }
     }
 
     @Override
-    protected void doBye(SipServletRequest request) throws ServletException, IOException {
+    protected void doBye(SipServletRequest request) throws IOException {
         request.createResponse(200).send();
     }
 
     @Override
     protected void doMessage(SipServletRequest request) throws ServletException, IOException {
-        String aorFrom = getAttr(request.getHeader("From"), "sip:");
-        String aorTo = getAttr(request.getHeader("To"), "sip:");
-
-        if (userType(request, "colaborador") && aorTo.equals("sip:alerta@acme.pt") && registrarDB.containsKey("sip:gestor@acme.pt")) {
-            request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get("sip:gestor@acme.pt")));
-            request.createResponse(200).send();
+        if (!inDomain(request)) {
+            request.createResponse(403).send();
             return;
         }
 
-        if (userType(request, "gestor") && aorTo.equals("sip:alerta@acme.pt") ) {
+        String aorFrom = getAttr(request.getHeader("To"), "sip:");
+        String aorTo = getAttr(request.getHeader("To"), "sip:");
+
+        if (aorFrom.equals(GESTOR) && aorTo.equals(ALERTA) && registrarDB.containsKey(GESTOR)) {
             // 0 - command
             // 1 - argument
             String[] msg = new String(request.getRawContent(), StandardCharsets.UTF_8).split(" ");
@@ -125,7 +136,12 @@ public class Redirect extends SipServlet {
                         return;
                     }
                     colabDB.add(msg[1]);
-                    SipServletRequest res = sipFactory.createRequest(request.getApplicationSession(), "MESSAGE", "sip:alerta@acme.pt", registrarDB.get(aorFrom));
+                    SipServletRequest res = sipFactory.createRequest(
+                            request.getApplicationSession(),
+                            "MESSAGE",
+                            ALERTA,
+                            registrarDB.get(GESTOR)
+                    );
                     res.setContent("OK".getBytes(), "text/plain");
                     res.send();
                     request.createResponse(200).send();
@@ -147,10 +163,21 @@ public class Redirect extends SipServlet {
             return;
         }
 
-        if (userType(request, "colaborador")) {
+        if (aorTo.equals(ALERTA)) {
+            if (registrarDB.containsKey(GESTOR)) {
+                request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(GESTOR)));
+                request.createResponse(200).send();
+            } else {
+                request.createResponse(404).send();
+            }
+            return;
+        }
+
+        if (registrarDB.containsKey(aorTo)) {
             request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(aorTo)));
             request.createResponse(200).send();
-            return;
+        } else {
+            request.createResponse(404).send();
         }
     }
 
@@ -159,10 +186,6 @@ public class Redirect extends SipServlet {
      */
     protected boolean inDomain(SipServletRequest request) {
         return getAttr(request.getHeader("From"), "@").equals("@acme.pt");
-    }
-
-    protected boolean userType(SipServletRequest request, String type) {
-        return getAttr(request.getHeader("From"), "sip:").contains(type);
     }
 
     /**
