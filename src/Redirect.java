@@ -121,7 +121,7 @@ public class Redirect extends SipServlet {
             return;
         }
 
-        String aorFrom = getAttr(request.getHeader("To"), "sip:");
+        String aorFrom = getAttr(request.getHeader("From"), "sip:");
         String aorTo = getAttr(request.getHeader("To"), "sip:");
 
         if (aorFrom.equals(GESTOR) && aorTo.equals(ALERTA) && registrarDB.containsKey(GESTOR)) {
