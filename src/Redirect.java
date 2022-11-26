@@ -25,7 +25,7 @@ public class Redirect extends SipServlet {
     }
 
     @Override
-    protected void doPublish(SipServletRequest request) throws ServletException, IOException {
+    protected void doPublish(SipServletRequest request) throws IOException {
         if (!inDomain(request)) {
             request.createResponse(403).send();
             return;
@@ -72,6 +72,7 @@ public class Redirect extends SipServlet {
             // this already handle ip/port changes for existing contacts
             // kinda insecure?
             registrarDB.put(aor, contact);
+            stateDB.put(aor, true);
             request.createResponse(200).send();
         }
     }
