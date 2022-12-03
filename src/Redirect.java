@@ -12,6 +12,10 @@ public class Redirect extends SipServlet {
 
     static final private String GESTOR = "sip:gestor@acme.pt";
     static final private String ALERTA = "sip:alerta@acme.pt";
+
+    static final private String SEMS_ADDR = "";
+
+    static private String currentlyInviting = "";
     /**
      * SipServlet functions
      */
@@ -37,7 +41,7 @@ public class Redirect extends SipServlet {
             return;
         }
 
-        stateDB.put(aor, request.getHeader("Content-Length").equals("194"));
+        stateDB.put(aor, new String(request.getRawContent(), StandardCharsets.UTF_8).contains("<status><basic>open</basic></status>"));
         request.createResponse(200).send();
     }
 
@@ -116,6 +120,11 @@ public class Redirect extends SipServlet {
     }
 
     @Override
+    protected void doResponse(SipServletResponse response) {
+        response.createAck();
+    }
+
+    @Override
     protected void doMessage(SipServletRequest request) throws ServletException, IOException {
         if (!inDomain(request)) {
             request.createResponse(403).send();
@@ -155,6 +164,25 @@ public class Redirect extends SipServlet {
                         return;
                     }
                     colabDB.remove(msg[1]);
+                    request.createResponse(200).send();
+                    break;
+                }
+                case "CONF": {
+                    if (colabDB.isEmpty()) {
+                        request.createResponse(403).send();
+                        break;
+                    }
+
+                    for (String c : colabDB) {
+                        SipServletRequest res = sipFactory.createRequest(
+                                request.getApplicationSession(),
+                                "MESSAGE",
+                                ALERTA,
+                                registrarDB.get(c)
+                        );
+                        res.setContent("NOT IMPLEMENTED".getBytes(), "text/plain");
+                        res.send();
+                    }
                     request.createResponse(200).send();
                     break;
                 }
