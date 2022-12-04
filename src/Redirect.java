@@ -18,6 +18,7 @@ public class Redirect extends SipServlet {
     static private String currentlyInviting = "";
 
     static private int smsIN=0;
+    static private int confDone = 0;
     /**
      * SipServlet functions
      */
@@ -174,6 +175,11 @@ public class Redirect extends SipServlet {
                         request.createResponse(403).send();
                         break;
                     }
+
+                    confDone++;
+                    log("======kpi======");
+                    log("CONF DONE: " + confDone);
+
 
                     for (String c : colabDB) {
                         SipServletRequest res = sipFactory.createRequest(
