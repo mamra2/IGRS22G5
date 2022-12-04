@@ -17,7 +17,7 @@ public class Redirect extends SipServlet {
 
     static private String currentlyInviting = "";
 
-    static private int smsIN=0:
+    static private int smsIN=0;
     /**
      * SipServlet functions
      */
@@ -129,7 +129,7 @@ public class Redirect extends SipServlet {
         }
 
 
-        smsIN++:
+        smsIN++;
         log("======kp1====");
         log( "SMS IN:"+ smsIN);
 
