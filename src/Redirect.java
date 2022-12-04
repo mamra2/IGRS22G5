@@ -110,7 +110,7 @@ public class Redirect extends SipServlet {
                 request.createResponse(404).send();
             }
         } else {
-             request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(aorTo)));
+            request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(aorTo)));
         }
     }
 
