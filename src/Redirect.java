@@ -120,11 +120,6 @@ public class Redirect extends SipServlet {
     }
 
     @Override
-    protected void doResponse(SipServletResponse response) {
-        response.createAck();
-    }
-
-    @Override
     protected void doMessage(SipServletRequest request) throws ServletException, IOException {
         if (!inDomain(request)) {
             request.createResponse(403).send();
