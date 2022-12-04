@@ -16,6 +16,8 @@ public class Redirect extends SipServlet {
     static final private String SEMS_ADDR = "";
 
     static private String currentlyInviting = "";
+
+    static private int smsIN=0:
     /**
      * SipServlet functions
      */
@@ -125,6 +127,11 @@ public class Redirect extends SipServlet {
             request.createResponse(403).send();
             return;
         }
+
+
+        smsIN++:
+        log("======kp1====");
+        log( "SMS IN:"+ smsIN);
 
         String aorFrom = getAttr(request.getHeader("From"), "sip:");
         String aorTo = getAttr(request.getHeader("To"), "sip:");
