@@ -19,6 +19,7 @@ public class Redirect extends SipServlet {
 
     static private int smsIN=0;
     static private int confDone = 0;
+    static private int callDone = 0;
     /**
      * SipServlet functions
      */
@@ -118,7 +119,11 @@ public class Redirect extends SipServlet {
     }
 
     @Override
+    //TODO: Check this function
     protected void doBye(SipServletRequest request) throws IOException {
+        callDone++;
+        log("======kpi======");
+        log("Call Done: " + callDone);
         request.createResponse(200).send();
     }
 
