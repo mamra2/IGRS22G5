@@ -200,11 +200,33 @@ public class Redirect extends SipServlet {
                     break;
                 }
                 default:
-                    request.createResponse(403).send();
+                    // Manager to collaborator
+                    // TODO: Check and Test this case
+                    log("==========================ALERT");
+                    // Adicionar "!registrarDB.containsKey(msg[1]) && " ao if
+                    // será inútil/redundante devido ao case ADD?
+                    if (!colabDB.containsKey(msg[1])) {
+                        request.createResponse(404).send();
+                        return;
+                    }
+                    SipServletRequest res = sipFactory.createRequest(
+                            request.getApplicationSession(),
+                            "MESSAGE",
+                            ALERTA,
+                            registrarDB.get(msg[1])
+                    );
+                    // TO-DO: Definir conteúdo de resposta a enviar
+                    res.setContent("OK".getBytes(), "text/plain");
+                    res.send();
+                    request.createResponse(200).send();
+                    break;
+                    // TODO: Remove comment after testing
+                    // request.createResponse(403).send();
             }
             return;
         }
 
+        // Collaborator to manager
         if (aorTo.equals(ALERTA)) {
             if (registrarDB.containsKey(GESTOR)) {
                 request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(GESTOR)));
@@ -215,6 +237,7 @@ public class Redirect extends SipServlet {
             return;
         }
 
+        // Collaborator to collaborator
         if (registrarDB.containsKey(aorTo)) {
             request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(aorTo)));
             request.createResponse(200).send();
