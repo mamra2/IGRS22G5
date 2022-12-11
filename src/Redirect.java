@@ -17,7 +17,7 @@ public class Redirect extends SipServlet {
 
     static private String currentlyInviting = "";
 
-    static private int smsIN=0;
+    static private int smsIN = 0;
     static private int confDone = 0;
     static private int callDone = 0;
     /**
@@ -77,7 +77,7 @@ public class Redirect extends SipServlet {
         } else {
             log("SIP REGISTER");
 
-            // this already handle ip/port changes for existing contacts
+            // this already handles ip/port changes for existing contacts
             // kinda insecure?
             registrarDB.put(aor, contact);
             stateDB.put(aor, true);
@@ -215,7 +215,7 @@ public class Redirect extends SipServlet {
                             ALERTA,
                             registrarDB.get(msg[1])
                     );
-                    // TO-DO: Definir conteúdo de resposta a enviar
+                    // TO-DO: Definir conteúdo de request a enviar
                     res.setContent("OK".getBytes(), "text/plain");
                     res.send();
                     request.createResponse(200).send();
