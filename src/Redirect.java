@@ -95,28 +95,19 @@ public class Redirect extends SipServlet {
         String aorFrom = getAttr(request.getHeader("From"), "sip:");
         String aorTo = getAttr(request.getHeader("To"), "sip:");
         if (!registrarDB.containsKey(aorTo)) {
-            if (aorTo.equals(ALERTA) && registrarDB.containsKey(GESTOR)) {
-                if (aorFrom.equals(GESTOR)) {
-                    SipServletRequest msg = sipFactory.createRequest(
-                            request.getApplicationSession(),
-                            "MESSAGE",
-                            ALERTA,
-                            registrarDB.get(GESTOR)
-                    );
-                    msg.setContent("ADD address\nREMOVE address".getBytes(), "text/plain");
-                    msg.send();
-                    // end the call
-                    request.createResponse(200).send();
-                } else {
-                    request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(GESTOR)));
-                }
+            if (aorTo.equals(ALERTA) && !aorFrom.contains("colaborador") && registrarDB.containsKey(GESTOR)) {
+                request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(GESTOR)));
             } else if (aorTo.equals(CONF) && registrarDB.containsKey(aorFrom)) {
                 request.getProxy().proxyTo(sipFactory.createURI(SEMS));
             } else {
                 request.createResponse(404).send();
             }
         } else {
-            request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(aorTo)));
+            if (aorTo.equals(GESTOR)) {
+                request.createResponse(403).send();
+            } else {
+                request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(aorTo)));
+            }
         }
     }
 
@@ -207,9 +198,17 @@ public class Redirect extends SipServlet {
             return;
         }
 
-        // Collaborator to manager
+        // Any directly to manager
+        if (aorTo.equals(GESTOR)) {
+            request.createResponse(403).send();
+            return;
+        }
+
+        // User to manager
         if (aorTo.equals(ALERTA)) {
-            if (registrarDB.containsKey(GESTOR)) {
+            if (aorFrom.contains("colaborador")) {
+                request.createResponse(403).send();
+            } else if (registrarDB.containsKey(GESTOR)) {
                 request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(GESTOR)));
                 request.createResponse(200).send();
             } else {
