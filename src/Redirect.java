@@ -2,7 +2,9 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.*;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Redirect extends SipServlet {
     static private Map<String, String> registrarDB;
@@ -12,10 +14,9 @@ public class Redirect extends SipServlet {
 
     static final private String GESTOR = "sip:gestor@acme.pt";
     static final private String ALERTA = "sip:alerta@acme.pt";
-
-    static final private String SEMS_ADDR = "";
-
-    static private String currentlyInviting = "";
+    static final private String CONF = "sip:conference@acme.pt";
+    static final private String SEMS = "sip:conference@127.0.0.1:5070";
+    static private boolean confHappening = false;
 
     static private int smsIN = 0;
     static private int confDone = 0;
@@ -109,22 +110,24 @@ public class Redirect extends SipServlet {
                     request.createResponse(200).send();
                 } else {
                     request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(GESTOR)));
+                    callDone++;
+                    log("======kp1====");
+                    log( "CALL DONE:"+ callDone);
                 }
+            } else if (aorTo.equals(CONF) && registrarDB.containsKey(aorFrom) && confHappening) {
+                request.getProxy().proxyTo(sipFactory.createURI(SEMS));
+                callDone++;
+                log("======kp1====");
+                log( "CALL DONE:"+ callDone);
             } else {
                 request.createResponse(404).send();
             }
         } else {
             request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(aorTo)));
+            callDone++;
+            log("======kp1====");
+            log( "CALL DONE:"+ callDone);
         }
-    }
-
-    @Override
-    //TODO: Check this function
-    protected void doBye(SipServletRequest request) throws IOException {
-        callDone++;
-        log("======kpi======");
-        log("Call Done: " + callDone);
-        request.createResponse(200).send();
     }
 
     @Override
@@ -133,7 +136,6 @@ public class Redirect extends SipServlet {
             request.createResponse(403).send();
             return;
         }
-
 
         smsIN++;
         log("======kp1====");
@@ -176,16 +178,11 @@ public class Redirect extends SipServlet {
                     break;
                 }
                 case "CONF": {
-                    if (colabDB.isEmpty()) {
-                        request.createResponse(403).send();
-                        break;
-                    }
-
                     confDone++;
                     log("======kpi======");
                     log("CONF DONE: " + confDone);
 
-
+                    confHappening = true;
                     for (String c : colabDB) {
                         SipServletRequest res = sipFactory.createRequest(
                                 request.getApplicationSession(),
@@ -193,35 +190,30 @@ public class Redirect extends SipServlet {
                                 ALERTA,
                                 registrarDB.get(c)
                         );
-                        res.setContent("NOT IMPLEMENTED".getBytes(), "text/plain");
+                        res.setContent("Call sip:conference@acme.pt", "text/plain");
+                        res.send();
+                    }
+
+                    request.createResponse(200).send();
+                    break;
+                }
+                case "ALERT":
+                    log("==========================ALERT");
+                    for (String c : colabDB) {
+                        SipServletRequest res = sipFactory.createRequest(
+                                request.getApplicationSession(),
+                                "MESSAGE",
+                                ALERTA,
+                                registrarDB.get(c)
+                        );
+
+                        res.setContent(request.getRawContent(), "text/plain");
                         res.send();
                     }
                     request.createResponse(200).send();
                     break;
-                }
                 default:
-                    // Manager to collaborator
-                    // TODO: Check and Test this case
-                    log("==========================ALERT");
-                    // Adicionar "!registrarDB.containsKey(msg[1]) && " ao if
-                    // será inútil/redundante devido ao case ADD?
-                    if (!colabDB.containsKey(msg[1])) {
-                        request.createResponse(404).send();
-                        return;
-                    }
-                    SipServletRequest res = sipFactory.createRequest(
-                            request.getApplicationSession(),
-                            "MESSAGE",
-                            ALERTA,
-                            registrarDB.get(msg[1])
-                    );
-                    // TO-DO: Definir conteúdo de request a enviar
-                    res.setContent("OK".getBytes(), "text/plain");
-                    res.send();
-                    request.createResponse(200).send();
-                    break;
-                    // TODO: Remove comment after testing
-                    // request.createResponse(403).send();
+                    request.createResponse(403).send();
             }
             return;
         }
