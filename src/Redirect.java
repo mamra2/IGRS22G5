@@ -110,23 +110,14 @@ public class Redirect extends SipServlet {
                     request.createResponse(200).send();
                 } else {
                     request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(GESTOR)));
-                    callDone++;
-                    log("======kp1====");
-                    log( "CALL DONE:"+ callDone);
                 }
             } else if (aorTo.equals(CONF) && registrarDB.containsKey(aorFrom) && confHappening) {
                 request.getProxy().proxyTo(sipFactory.createURI(SEMS));
-                callDone++;
-                log("======kp1====");
-                log( "CALL DONE:"+ callDone);
             } else {
                 request.createResponse(404).send();
             }
         } else {
             request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(aorTo)));
-            callDone++;
-            log("======kp1====");
-            log( "CALL DONE:"+ callDone);
         }
     }
 
@@ -236,6 +227,15 @@ public class Redirect extends SipServlet {
         } else {
             request.createResponse(404).send();
         }
+    }
+
+    @Override
+    protected void doBye(SipServletRequest sipServletRequest) throws ServletException, IOException {
+        callDone++;
+        log("======kp1====");
+        log( "CALL DONE:"+ callDone);
+
+        super.doBye(sipServletRequest);
     }
 
     /**
