@@ -16,7 +16,6 @@ public class Redirect extends SipServlet {
     static final private String ALERTA = "sip:alerta@acme.pt";
     static final private String CONF = "sip:conference@acme.pt";
     static final private String SEMS = "sip:conference@127.0.0.1:5070";
-    static private boolean confHappening = false;
 
     static private int smsIN = 0;
     static private int confDone = 0;
@@ -111,7 +110,7 @@ public class Redirect extends SipServlet {
                 } else {
                     request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(GESTOR)));
                 }
-            } else if (aorTo.equals(CONF) && registrarDB.containsKey(aorFrom) && confHappening) {
+            } else if (aorTo.equals(CONF) && registrarDB.containsKey(aorFrom)) {
                 request.getProxy().proxyTo(sipFactory.createURI(SEMS));
             } else {
                 request.createResponse(404).send();
@@ -173,7 +172,6 @@ public class Redirect extends SipServlet {
                     log("======kpi======");
                     log("CONF DONE: " + confDone);
 
-                    confHappening = true;
                     for (String c : colabDB) {
                         SipServletRequest res = sipFactory.createRequest(
                                 request.getApplicationSession(),
@@ -230,12 +228,12 @@ public class Redirect extends SipServlet {
     }
 
     @Override
-    protected void doBye(SipServletRequest sipServletRequest) throws ServletException, IOException {
+    protected void doBye(SipServletRequest request) throws ServletException, IOException {
         callDone++;
         log("======kp1====");
         log( "CALL DONE:"+ callDone);
 
-        super.doBye(sipServletRequest);
+        super.doBye(request);
     }
 
     /**
