@@ -30,6 +30,7 @@ public class Redirect extends SipServlet {
         registrarDB = new HashMap<>();
         stateDB = new HashMap<>();
         colabDB = new ArrayList<>();
+        colabDB.add(GESTOR);
     }
 
     @Override
@@ -97,7 +98,7 @@ public class Redirect extends SipServlet {
         if (!registrarDB.containsKey(aorTo)) {
             if (aorTo.equals(ALERTA) && !aorFrom.contains("colaborador") && registrarDB.containsKey(GESTOR)) {
                 request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(GESTOR)));
-            } else if (aorTo.equals(CONF) && registrarDB.containsKey(aorFrom)) {
+            } else if (aorTo.equals(CONF) && registrarDB.containsKey(aorFrom) && colabDB.contains(aorFrom)) {
                 request.getProxy().proxyTo(sipFactory.createURI(SEMS));
             } else {
                 request.createResponse(404).send();
@@ -155,6 +156,14 @@ public class Redirect extends SipServlet {
                         return;
                     }
                     colabDB.remove(msg[1]);
+                    SipServletRequest res = sipFactory.createRequest(
+                            request.getApplicationSession(),
+                            "MESSAGE",
+                            ALERTA,
+                            registrarDB.get(GESTOR)
+                    );
+                    res.setContent("OK".getBytes(), "text/plain");
+                    res.send();
                     request.createResponse(200).send();
                     break;
                 }
