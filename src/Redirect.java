@@ -1,5 +1,6 @@
 import javax.servlet.ServletException;
 import javax.servlet.sip.*;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -7,15 +8,16 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Redirect extends SipServlet {
-    static private Map<String, String> registrarDB;
-    static private Map<String, Boolean> stateDB;
-    static private ArrayList<String> colabDB;
+    static private Map<String, String> registrarDB; // registration db
+    static private Map<String, Boolean> stateDB; // online/offline db
+    static private ArrayList<String> colabDB; // collaborator db
     static private SipFactory sipFactory;
 
     static final private String GESTOR = "sip:gestor@acme.pt";
     static final private String ALERTA = "sip:alerta@acme.pt";
     static final private String CONF = "sip:conference@acme.pt";
     static final private String SEMS = "sip:conference@127.0.0.1:5070";
+    static private boolean conf = false;
 
     static private int smsIN = 0;
     static private int confDone = 0;
@@ -29,6 +31,7 @@ public class Redirect extends SipServlet {
 
         registrarDB = new HashMap<>();
         stateDB = new HashMap<>();
+
         colabDB = new ArrayList<>();
         colabDB.add(GESTOR);
     }
@@ -98,7 +101,7 @@ public class Redirect extends SipServlet {
         if (!registrarDB.containsKey(aorTo)) {
             if (aorTo.equals(ALERTA) && !aorFrom.contains("colaborador") && registrarDB.containsKey(GESTOR)) {
                 request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(GESTOR)));
-            } else if (aorTo.equals(CONF) && registrarDB.containsKey(aorFrom) && colabDB.contains(aorFrom)) {
+            } else if (aorTo.equals(CONF) && registrarDB.containsKey(aorFrom) && colabDB.contains(aorFrom) && conf) {
                 request.getProxy().proxyTo(sipFactory.createURI(SEMS));
             } else {
                 request.createResponse(404).send();
@@ -168,27 +171,68 @@ public class Redirect extends SipServlet {
                     break;
                 }
                 case "CONF": {
-                    confDone++;
-                    log("======kpi======");
-                    log("CONF DONE: " + confDone);
-
-                    for (String c : colabDB) {
-                        SipServletRequest res = sipFactory.createRequest(
-                                request.getApplicationSession(),
-                                "MESSAGE",
-                                ALERTA,
-                                registrarDB.get(c)
-                        );
-                        res.setContent("Call sip:conference@acme.pt", "text/plain");
-                        res.send();
-                    }
-
                     request.createResponse(200).send();
+                    conf = !conf;
+
+                    if (conf) {
+                        confDone++;
+                        log("======kpi======");
+                        log("CONF DONE: " + confDone);
+
+                        String[] cmd = {"bash", "-c", "./launch.sh"};
+                        Runtime.getRuntime().exec(cmd, null, new File("/home/igrs/Desktop/igrs-tools/sems"));
+
+                        for (String c : colabDB) {
+                            if (c.equals(GESTOR)) {
+                                continue;
+                            }
+
+                            if (!stateDB.get(c)) {
+                                continue;
+                            }
+
+                            SipServletRequest res = sipFactory.createRequest(
+                                    request.getApplicationSession(),
+                                    "MESSAGE",
+                                    ALERTA,
+                                    registrarDB.get(c)
+                            );
+                            res.setContent("Call sip:conference@acme.pt", "text/plain");
+                            res.send();
+                        }
+                    } else {
+                        // kill with 2 SIGINT (INT) so everyone gets disconnected
+                        String[] cmd = {"bash", "-c", "sudo killall -s 2 sems"};
+                        Runtime.getRuntime().exec(cmd);
+
+                        for (String c : colabDB) {
+                            if (c.equals(GESTOR)) {
+                                continue;
+                            }
+
+                            if (!stateDB.get(c)) {
+                                continue;
+                            }
+
+                            SipServletRequest res = sipFactory.createRequest(
+                                    request.getApplicationSession(),
+                                    "MESSAGE",
+                                    ALERTA,
+                                    registrarDB.get(c)
+                            );
+                            res.setContent("The conference is over.", "text/plain");
+                            res.send();
+                        }
+                    }
                     break;
                 }
                 case "ALERT":
                     log("==========================ALERT");
                     for (String c : colabDB) {
+                        if (c.equals(GESTOR)) {
+                            continue;
+                        }
+
                         SipServletRequest res = sipFactory.createRequest(
                                 request.getApplicationSession(),
                                 "MESSAGE",
@@ -207,13 +251,13 @@ public class Redirect extends SipServlet {
             return;
         }
 
-        // Any directly to manager
+        // any directly to manager
         if (aorTo.equals(GESTOR)) {
             request.createResponse(403).send();
             return;
         }
 
-        // User to manager
+        // user to manager
         if (aorTo.equals(ALERTA)) {
             if (aorFrom.contains("colaborador")) {
                 request.createResponse(403).send();
@@ -226,7 +270,7 @@ public class Redirect extends SipServlet {
             return;
         }
 
-        // Collaborator to collaborator
+        // collaborator/user to collaborator/user
         if (registrarDB.containsKey(aorTo)) {
             request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(aorTo)));
             request.createResponse(200).send();
