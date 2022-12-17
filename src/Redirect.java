@@ -8,20 +8,20 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Redirect extends SipServlet {
-    static private Map<String, String> registrarDB; // registration db
-    static private Map<String, Boolean> stateDB; // online/offline db
-    static private ArrayList<String> colabDB; // collaborator db
-    static private SipFactory sipFactory;
-
     static final private String GESTOR = "sip:gestor@acme.pt";
     static final private String ALERTA = "sip:alerta@acme.pt";
     static final private String CONF = "sip:conference@acme.pt";
     static final private String SEMS = "sip:conference@127.0.0.1:5070";
+    static private Map<String, String> registrarDB; // registration db
+    static private Map<String, Boolean> stateDB; // online/offline db
+    static private ArrayList<String> colabDB; // collaborator db
+    static private SipFactory sipFactory;
     static private boolean conf = false;
 
-    static private int smsIN = 0;
-    static private int confDone = 0;
-    static private int callDone = 0;
+    static private int smsKPI = 0;
+    static private int conferenceKPI = 0;
+    static private int callKPI = 0;
+
     /**
      * SipServlet functions
      */
@@ -66,15 +66,18 @@ public class Redirect extends SipServlet {
 
         // if not null then linphone
         String expiresHeader = request.getHeader("Expires");
+        // choose the right expiry value
         String expiry = expiresHeader != null ? expiresHeader : contactHeader.split("=")[1];
         log(expiresHeader != null ? "LINPHONE" : "TWINKLE");
         if (expiry.equals("0")) {
             log("SIP UNREGISTER");
 
+            // can't unregister if not registered
             if (!registrarDB.containsKey(aor)) {
                 request.createResponse(404).send();
             } else {
                 registrarDB.remove(aor);
+                // also remove state
                 stateDB.remove(aor);
                 request.createResponse(200).send();
             }
@@ -84,6 +87,7 @@ public class Redirect extends SipServlet {
             // this already handles ip/port changes for existing contacts
             // kinda insecure?
             registrarDB.put(aor, contact);
+            // precaution
             stateDB.put(aor, true);
             request.createResponse(200).send();
         }
@@ -100,17 +104,27 @@ public class Redirect extends SipServlet {
         String aorTo = getAttr(request.getHeader("To"), "sip:");
         if (!registrarDB.containsKey(aorTo)) {
             if (aorTo.equals(ALERTA) && !aorFrom.contains("colaborador") && registrarDB.containsKey(GESTOR)) {
+                // to ALERTA from user
                 request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(GESTOR)));
             } else if (aorTo.equals(CONF) && registrarDB.containsKey(aorFrom) && colabDB.contains(aorFrom) && conf) {
+                // to CONF from any collaborator while conference is ongoing
                 request.getProxy().proxyTo(sipFactory.createURI(SEMS));
             } else {
+                // not registered
                 request.createResponse(404).send();
             }
         } else {
+            // cant contact GESTOR directly
             if (aorTo.equals(GESTOR)) {
                 request.createResponse(403).send();
             } else {
-                request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(aorTo)));
+                // both have to be online
+                if (stateDB.get(aorTo) && stateDB.get(aorFrom)) {
+                    request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(aorTo)));
+                } else {
+                    // 404 if either offline
+                    request.createResponse(404).send();
+                }
             }
         }
     }
@@ -122,12 +136,12 @@ public class Redirect extends SipServlet {
             return;
         }
 
-        smsIN++;
-        log("======kp1====");
-        log( "SMS IN:"+ smsIN);
-
         String aorFrom = getAttr(request.getHeader("From"), "sip:");
         String aorTo = getAttr(request.getHeader("To"), "sip:");
+
+        smsKPI++;
+        log("======KPI======");
+        log("SMS: " + smsKPI);
 
         if (aorFrom.equals(GESTOR) && aorTo.equals(ALERTA) && registrarDB.containsKey(GESTOR)) {
             // 0 - command
@@ -140,7 +154,9 @@ public class Redirect extends SipServlet {
                         request.createResponse(404).send();
                         return;
                     }
+
                     colabDB.add(msg[1]);
+
                     SipServletRequest res = sipFactory.createRequest(
                             request.getApplicationSession(),
                             "MESSAGE",
@@ -149,6 +165,7 @@ public class Redirect extends SipServlet {
                     );
                     res.setContent("OK".getBytes(), "text/plain");
                     res.send();
+
                     request.createResponse(200).send();
                     break;
                 }
@@ -158,7 +175,9 @@ public class Redirect extends SipServlet {
                         request.createResponse(404).send();
                         return;
                     }
+
                     colabDB.remove(msg[1]);
+
                     SipServletRequest res = sipFactory.createRequest(
                             request.getApplicationSession(),
                             "MESSAGE",
@@ -167,38 +186,43 @@ public class Redirect extends SipServlet {
                     );
                     res.setContent("OK".getBytes(), "text/plain");
                     res.send();
+
                     request.createResponse(200).send();
                     break;
                 }
                 case "CONF": {
+                    log("==========================CONF");
                     request.createResponse(200).send();
                     conf = !conf;
 
                     if (conf) {
-                        confDone++;
-                        log("======kpi======");
-                        log("CONF DONE: " + confDone);
+                        conferenceKPI++;
+                        log("======KPI======");
+                        log("CONF: " + conferenceKPI);
 
+                        // launch sems when a conference starts
                         String[] cmd = {"bash", "-c", "./launch.sh"};
                         Runtime.getRuntime().exec(cmd, null, new File("/home/igrs/Desktop/igrs-tools/sems"));
 
                         for (String c : colabDB) {
+                            // skip GESTOR because he's the one sending the message
                             if (c.equals(GESTOR)) {
                                 continue;
                             }
 
+                            // dont message offline collaborators
                             if (!stateDB.get(c)) {
                                 continue;
                             }
 
-                            SipServletRequest res = sipFactory.createRequest(
+                            SipServletRequest confMsg = sipFactory.createRequest(
                                     request.getApplicationSession(),
                                     "MESSAGE",
                                     ALERTA,
                                     registrarDB.get(c)
                             );
-                            res.setContent("Call sip:conference@acme.pt", "text/plain");
-                            res.send();
+                            confMsg.setContent("Call sip:conference@acme.pt", "text/plain");
+                            confMsg.send();
                         }
                     } else {
                         // kill with 2 SIGINT (INT) so everyone gets disconnected
@@ -206,26 +230,43 @@ public class Redirect extends SipServlet {
                         Runtime.getRuntime().exec(cmd);
 
                         for (String c : colabDB) {
+                            // skip GESTOR because he's the one sending the message
                             if (c.equals(GESTOR)) {
                                 continue;
                             }
 
+                            // dont message offline collaborators
                             if (!stateDB.get(c)) {
                                 continue;
                             }
 
-                            SipServletRequest res = sipFactory.createRequest(
+                            SipServletRequest confMsg = sipFactory.createRequest(
                                     request.getApplicationSession(),
                                     "MESSAGE",
                                     ALERTA,
                                     registrarDB.get(c)
                             );
-                            res.setContent("The conference is over.", "text/plain");
-                            res.send();
+                            confMsg.setContent("The conference is over.", "text/plain");
+                            confMsg.send();
                         }
                     }
                     break;
                 }
+                case "GETKPI":
+                    log("==========================GETKPI");
+
+                    SipServletRequest kpi = sipFactory.createRequest(
+                            request.getApplicationSession(),
+                            "MESSAGE",
+                            ALERTA,
+                            registrarDB.get(GESTOR)
+                    );
+
+                    kpi.setContent(String.format("SMS: %d CALLS: %d CONF: %d", smsKPI, callKPI, conferenceKPI), "text/plain");
+                    kpi.send();
+
+                    request.createResponse(200).send();
+                    break;
                 case "ALERT":
                     log("==========================ALERT");
                     for (String c : colabDB) {
@@ -233,15 +274,15 @@ public class Redirect extends SipServlet {
                             continue;
                         }
 
-                        SipServletRequest res = sipFactory.createRequest(
+                        SipServletRequest alert = sipFactory.createRequest(
                                 request.getApplicationSession(),
                                 "MESSAGE",
                                 ALERTA,
                                 registrarDB.get(c)
                         );
 
-                        res.setContent(request.getRawContent(), "text/plain");
-                        res.send();
+                        alert.setContent(request.getContent(), "text/plain");
+                        alert.send();
                     }
                     request.createResponse(200).send();
                     break;
@@ -251,7 +292,7 @@ public class Redirect extends SipServlet {
             return;
         }
 
-        // any directly to manager
+        // block any direct message to manager
         if (aorTo.equals(GESTOR)) {
             request.createResponse(403).send();
             return;
@@ -259,12 +300,14 @@ public class Redirect extends SipServlet {
 
         // user to manager
         if (aorTo.equals(ALERTA)) {
+            // block collaborators
             if (aorFrom.contains("colaborador")) {
                 request.createResponse(403).send();
             } else if (registrarDB.containsKey(GESTOR)) {
                 request.getProxy().proxyTo(sipFactory.createURI(registrarDB.get(GESTOR)));
                 request.createResponse(200).send();
             } else {
+                // 404 if GESTOR not registered
                 request.createResponse(404).send();
             }
             return;
@@ -280,12 +323,15 @@ public class Redirect extends SipServlet {
     }
 
     @Override
-    protected void doBye(SipServletRequest request) throws ServletException, IOException {
-        callDone++;
-        log("======kp1====");
-        log( "CALL DONE:"+ callDone);
+    protected void doResponse(SipServletResponse response) throws ServletException, IOException {
+        // if getContent is not null then it's an INVITE response
+        if (response.getContent() != null) {
+            callKPI++;
+            log("======KPI======");
+            log("CALL:" + callKPI);
+        }
 
-        super.doBye(request);
+        super.doResponse(response);
     }
 
     /**
